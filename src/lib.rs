@@ -12,19 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![doc = include_str!("../README.md")]
+
 pub mod api;
+pub mod bulk;
 pub mod channel_manager;
-mod client;
-mod database;
+pub mod client;
+pub mod database;
 mod error;
+pub mod flight;
 pub mod helpers;
 pub mod load_balance;
-mod stream_insert;
+pub mod table;
 
 pub use self::channel_manager::{ChannelConfig, ChannelManager, ClientTlsOption};
-pub use self::client::{Client, ClientBuilder, Compression};
-pub use self::database::Database;
 pub use self::error::{Error, Result};
-pub use self::stream_insert::StreamInserter;
+
+// Re-export bulk module components for easier access
+pub use self::bulk::{BulkInserter, BulkStreamWriter, BulkWriteOptions, ColumnType};
+
+// Re-export table module components for easier access
+pub use self::table::{Column, Row, Table, TableBuilder, Value};
+
+// Re-export API types for direct access
+pub use self::api::v1::{ColumnDataType, SemanticType};
 
 pub const DEFAULT_SCHEMA_NAME: &str = "public";

@@ -15,7 +15,7 @@
 use std::io;
 
 use snafu::{Location, Snafu};
-use tonic::Status;
+use tonic::{metadata::errors::InvalidMetadataValue, Status};
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
@@ -34,11 +34,11 @@ pub enum Error {
         location: Location,
     },
 
-    #[snafu(display("Failed to create gRPC channel, source: {}", source))]
+    #[snafu(display("Failed to create gRPC channel"))]
     CreateChannel {
-        source: tonic::transport::Error,
         #[snafu(implicit)]
         location: Location,
+        source: tonic::transport::Error,
     },
 
     #[snafu(display("Unknown proto column datatype: {}", datatype))]
@@ -48,7 +48,7 @@ pub enum Error {
         location: Location,
     },
 
-    #[snafu(display("Illegal GRPC client state: {}", err_msg))]
+    #[snafu(display("Illegal gRPC client state: {}", err_msg))]
     IllegalGrpcClientState {
         err_msg: String,
         #[snafu(implicit)]
@@ -80,9 +80,77 @@ pub enum Error {
         location: Location,
     },
 
-    #[snafu(display("Failed to parse ascii string: {}", value))]
-    InvalidAscii {
-        value: String,
+    #[snafu(display("Invalid Tonic metadata value"))]
+    InvalidTonicMetadataValue {
+        #[snafu(source)]
+        error: InvalidMetadataValue,
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display("Failed to serde Json"))]
+    SerdeJson {
+        #[snafu(source)]
+        error: serde_json::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display("Failed to create Arrow RecordBatch"))]
+    CreateRecordBatch {
+        #[snafu(source)]
+        error: arrow_schema::ArrowError,
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display("Unsupported data type: {:?}", data_type))]
+    UnsupportedDataType {
+        data_type: String,
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display("Cannot write empty rows"))]
+    EmptyRows {
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display("Failed to serialize metadata"))]
+    SerializeMetadata {
+        #[snafu(source)]
+        error: serde_json::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display("Failed to send data to stream"))]
+    SendData {
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display("Response stream ended unexpectedly"))]
+    StreamEnded {
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display("Failed to close sender channel"))]
+    CloseSender {
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display(
+        "Request timeout after {:?} for request IDs: {:?}",
+        timeout,
+        request_ids
+    ))]
+    RequestTimeout {
+        request_ids: Vec<i64>,
+        timeout: std::time::Duration,
         #[snafu(implicit)]
         location: Location,
     },

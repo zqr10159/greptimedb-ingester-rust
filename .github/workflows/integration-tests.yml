@@ -1,0 +1,66 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+  schedule:
+    # Run integration tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+  GREPTIMEDB_TEST_ENDPOINT: localhost:4001
+  GREPTIMEDB_TEST_DATABASE: public
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: integration-tests
+
+    - name: Install Protocol Buffers compiler
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler
+        protoc --version
+
+    - name: Run format check
+      run: cargo fmt --all -- --check
+
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Build project
+      run: cargo build --release
+
+    - name: Run unit tests
+      run: cargo test --lib
+
+    - name: Start GreptimeDB with Docker Compose
+      run: |
+        docker compose -f docker-compose.test.yml up -d
+        timeout 60 bash -c 'until curl -f http://localhost:4000/health; do sleep 1; done'
+        echo "GreptimeDB is ready!"
+
+    - name: Run integration tests
+      run: cargo test --test integration --features integration-tests --verbose
+      env:
+        RUST_LOG: info
+
+    - name: Cleanup
+      run: docker compose -f docker-compose.test.yml down -v
+      if: always()
