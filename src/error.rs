@@ -41,13 +41,6 @@ pub enum Error {
         source: tonic::transport::Error,
     },
 
-    #[snafu(display("Unknown proto column datatype: {}", datatype))]
-    UnknownColumnDataType {
-        datatype: i32,
-        #[snafu(implicit)]
-        location: Location,
-    },
-
     #[snafu(display("Illegal gRPC client state: {}", err_msg))]
     IllegalGrpcClientState {
         err_msg: String,
@@ -68,13 +61,6 @@ pub enum Error {
 
     #[snafu(display("Illegal Database response: {err_msg}"))]
     IllegalDatabaseResponse {
-        err_msg: String,
-        #[snafu(implicit)]
-        location: Location,
-    },
-
-    #[snafu(display("Failed to send request with streaming: {}", err_msg))]
-    ClientStreaming {
         err_msg: String,
         #[snafu(implicit)]
         location: Location,
@@ -111,12 +97,6 @@ pub enum Error {
         location: Location,
     },
 
-    #[snafu(display("Cannot write empty rows"))]
-    EmptyRows {
-        #[snafu(implicit)]
-        location: Location,
-    },
-
     #[snafu(display("Failed to serialize metadata"))]
     SerializeMetadata {
         #[snafu(source)]
@@ -137,12 +117,6 @@ pub enum Error {
         location: Location,
     },
 
-    #[snafu(display("Failed to close sender channel"))]
-    CloseSender {
-        #[snafu(implicit)]
-        location: Location,
-    },
-
     #[snafu(display(
         "Request timeout after {:?} for request IDs: {:?}",
         timeout,
@@ -151,6 +125,18 @@ pub enum Error {
     RequestTimeout {
         request_ids: Vec<i64>,
         timeout: std::time::Duration,
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display(
+        "Schema mismatch: BulkStreamWriter expects schema {} but got {}",
+        expected,
+        actual
+    ))]
+    SchemaMismatch {
+        expected: String,
+        actual: String,
         #[snafu(implicit)]
         location: Location,
     },

@@ -18,33 +18,38 @@ use derive_builder::Builder;
 
 use crate::api::v1::{ColumnDataType, SemanticType};
 
-/// Represents a time-series data table with schema and data
-#[derive(Debug, Clone, Builder)]
-#[builder(setter(into))]
-pub struct Table {
-    /// Table name
-    pub name: String,
-    /// Table columns
-    #[builder(default)]
-    pub columns: Vec<Column>,
-    /// Table data rows
-    #[builder(default)]
-    pub rows: Vec<Row>,
+/// Extended data type information for columns that need additional parameters
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DataTypeExtension {
+    /// Decimal128 with specific precision and scale
+    Decimal128 { precision: u8, scale: i8 },
 }
 
-impl Table {
-    /// Create a new table builder
-    pub fn builder() -> TableBuilder {
-        TableBuilder::default()
+/// Represents a time-series data table with schema
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
+pub struct TableSchema {
+    /// Table name
+    name: String,
+    /// Table columns
+    #[builder(default)]
+    columns: Vec<Column>,
+}
+
+impl TableSchema {
+    /// Create a new table schema builder
+    pub fn builder() -> TableSchemaBuilder {
+        TableSchemaBuilder::default()
     }
 
-    /// Create a new table with pre-allocated capacity for columns and rows
-    pub fn with_capacity(column_capacity: usize, row_capacity: usize) -> Self {
-        Self {
-            name: String::new(),
-            columns: Vec::with_capacity(column_capacity),
-            rows: Vec::with_capacity(row_capacity),
-        }
+    /// Get the table name
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get the table columns
+    pub fn columns(&self) -> &[Column] {
+        &self.columns
     }
 
     /// Add a tag column (for indexing and grouping)
@@ -53,6 +58,7 @@ impl Table {
             name: name.into(),
             data_type,
             semantic_type: SemanticType::Tag,
+            data_type_extension: None,
         });
         self
     }
@@ -63,6 +69,7 @@ impl Table {
             name: name.into(),
             data_type,
             semantic_type: SemanticType::Timestamp,
+            data_type_extension: None,
         });
         self
     }
@@ -73,19 +80,24 @@ impl Table {
             name: name.into(),
             data_type,
             semantic_type: SemanticType::Field,
+            data_type_extension: None,
         });
         self
     }
 
-    /// Add a data row
-    pub fn add_row(mut self, row: Row) -> Self {
-        self.rows.push(row);
-        self
-    }
-
-    /// Add multiple rows
-    pub fn add_rows(mut self, rows: Vec<Row>) -> Self {
-        self.rows.extend(rows);
+    /// Add a decimal128 field column with specific precision and scale
+    pub fn add_decimal128_field<T: Into<String>>(
+        mut self,
+        name: T,
+        precision: u8,
+        scale: i8,
+    ) -> Self {
+        self.columns.push(Column {
+            name: name.into(),
+            data_type: ColumnDataType::Decimal128,
+            semantic_type: SemanticType::Field,
+            data_type_extension: Some(DataTypeExtension::Decimal128 { precision, scale }),
+        });
         self
     }
 }
@@ -96,6 +108,8 @@ pub struct Column {
     pub name: String,
     pub data_type: ColumnDataType,
     pub semantic_type: SemanticType,
+    /// Extended type information for data types that need additional parameters
+    pub data_type_extension: Option<DataTypeExtension>,
 }
 
 /// Represents a data row with type-safe value access
@@ -140,94 +154,357 @@ impl Row {
         self
     }
 
-    /// Get boolean value at index
+    /// Get boolean value at index (safe version with bounds checking)
     pub fn get_bool(&self, index: usize) -> Option<bool> {
-        self.values.get(index)?.as_bool()
+        match self.values.get(index)? {
+            Value::Boolean(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get i8 value at index
+    /// Get boolean value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_bool_unchecked(&self, index: usize) -> Option<bool> {
+        match self.values.get_unchecked(index) {
+            Value::Boolean(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get i8 value at index (safe version with bounds checking)
     pub fn get_i8(&self, index: usize) -> Option<i8> {
-        self.values.get(index)?.as_i8()
+        match self.values.get(index)? {
+            Value::Int8(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get i16 value at index
+    /// Get i8 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_i8_unchecked(&self, index: usize) -> Option<i8> {
+        match self.values.get_unchecked(index) {
+            Value::Int8(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get i16 value at index (safe version with bounds checking)
     pub fn get_i16(&self, index: usize) -> Option<i16> {
-        self.values.get(index)?.as_i16()
+        match self.values.get(index)? {
+            Value::Int16(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get i32 value at index
+    /// Get i16 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_i16_unchecked(&self, index: usize) -> Option<i16> {
+        match self.values.get_unchecked(index) {
+            Value::Int16(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get i32 value at index (safe version with bounds checking)
     pub fn get_i32(&self, index: usize) -> Option<i32> {
-        self.values.get(index)?.as_i32()
+        match self.values.get(index)? {
+            Value::Int32(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get i64 value at index
+    /// Get i32 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_i32_unchecked(&self, index: usize) -> Option<i32> {
+        match self.values.get_unchecked(index) {
+            Value::Int32(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get i64 value at index (safe version with bounds checking)
     pub fn get_i64(&self, index: usize) -> Option<i64> {
-        self.values.get(index)?.as_i64()
+        match self.values.get(index)? {
+            Value::Int64(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get u8 value at index
+    /// Get i64 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_i64_unchecked(&self, index: usize) -> Option<i64> {
+        match self.values.get_unchecked(index) {
+            Value::Int64(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get u8 value at index (safe version with bounds checking)
     pub fn get_u8(&self, index: usize) -> Option<u8> {
-        self.values.get(index)?.as_u8()
+        match self.values.get(index)? {
+            Value::Uint8(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get u16 value at index
+    /// Get u8 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_u8_unchecked(&self, index: usize) -> Option<u8> {
+        match self.values.get_unchecked(index) {
+            Value::Uint8(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get u16 value at index (safe version with bounds checking)
     pub fn get_u16(&self, index: usize) -> Option<u16> {
-        self.values.get(index)?.as_u16()
+        match self.values.get(index)? {
+            Value::Uint16(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get u32 value at index
+    /// Get u16 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_u16_unchecked(&self, index: usize) -> Option<u16> {
+        match self.values.get_unchecked(index) {
+            Value::Uint16(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get u32 value at index (safe version with bounds checking)
     pub fn get_u32(&self, index: usize) -> Option<u32> {
-        self.values.get(index)?.as_u32()
+        match self.values.get(index)? {
+            Value::Uint32(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get u64 value at index
+    /// Get u32 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_u32_unchecked(&self, index: usize) -> Option<u32> {
+        match self.values.get_unchecked(index) {
+            Value::Uint32(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get u64 value at index (safe version with bounds checking)
     pub fn get_u64(&self, index: usize) -> Option<u64> {
-        self.values.get(index)?.as_u64()
+        match self.values.get(index)? {
+            Value::Uint64(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get f32 value at index
+    /// Get u64 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_u64_unchecked(&self, index: usize) -> Option<u64> {
+        match self.values.get_unchecked(index) {
+            Value::Uint64(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get f32 value at index (safe version with bounds checking)
     pub fn get_f32(&self, index: usize) -> Option<f32> {
-        self.values.get(index)?.as_f32()
+        match self.values.get(index)? {
+            Value::Float32(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get f64 value at index
+    /// Get f32 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_f32_unchecked(&self, index: usize) -> Option<f32> {
+        match self.values.get_unchecked(index) {
+            Value::Float32(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get f64 value at index (safe version with bounds checking)
     pub fn get_f64(&self, index: usize) -> Option<f64> {
-        self.values.get(index)?.as_f64()
+        match self.values.get(index)? {
+            Value::Float64(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get binary value at index
+    /// Get f64 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_f64_unchecked(&self, index: usize) -> Option<f64> {
+        match self.values.get_unchecked(index) {
+            Value::Float64(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get binary value at index (safe version with bounds checking)
     pub fn get_binary(&self, index: usize) -> Option<Vec<u8>> {
-        self.values.get(index)?.as_binary()
+        match self.values.get(index)? {
+            Value::Binary(v) => Some(v.clone()),
+            Value::String(v) => Some(v.as_bytes().to_vec()), // JSON type
+            _ => None,
+        }
     }
 
-    /// Get string value at index
+    /// Get binary value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_binary_unchecked(&self, index: usize) -> Option<Vec<u8>> {
+        match self.values.get_unchecked(index) {
+            Value::Binary(v) => Some(v.clone()),
+            Value::String(v) => Some(v.as_bytes().to_vec()), // JSON type
+            _ => None,
+        }
+    }
+
+    /// Take binary value at index (safe version with bounds checking)
+    pub fn take_binary(&mut self, index: usize) -> Option<Vec<u8>> {
+        if index >= self.values.len() {
+            return None;
+        }
+        unsafe { self.take_binary_unchecked(index) }
+    }
+
+    /// Take binary value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn take_binary_unchecked(&mut self, index: usize) -> Option<Vec<u8>> {
+        match std::mem::replace(self.values.get_unchecked_mut(index), Value::Null) {
+            Value::Binary(v) => Some(v),
+            Value::String(v) => Some(v.into_bytes()), // JSON type
+            _ => None,
+        }
+    }
+
+    /// Get string value at index (safe version with bounds checking)
     pub fn get_string(&self, index: usize) -> Option<String> {
-        self.values.get(index)?.as_string()
+        match self.values.get(index)? {
+            Value::String(v) => Some(v.clone()),
+            _ => None,
+        }
     }
 
-    /// Get date value at index
+    /// Get string value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_string_unchecked(&self, index: usize) -> Option<String> {
+        match self.values.get_unchecked(index) {
+            Value::String(v) => Some(v.clone()),
+            _ => None,
+        }
+    }
+
+    /// Take string value at index (safe version with bounds checking)
+    pub fn take_string(&mut self, index: usize) -> Option<String> {
+        if index >= self.values.len() {
+            return None;
+        }
+        unsafe { self.take_string_unchecked(index) }
+    }
+
+    /// Take string value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn take_string_unchecked(&mut self, index: usize) -> Option<String> {
+        match std::mem::replace(self.values.get_unchecked_mut(index), Value::Null) {
+            Value::String(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// Get date value at index (safe version with bounds checking)
     pub fn get_date(&self, index: usize) -> Option<i32> {
-        self.values.get(index)?.as_date()
+        match self.values.get(index)? {
+            Value::Date(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get datetime value at index
+    /// Get date value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_date_unchecked(&self, index: usize) -> Option<i32> {
+        match self.values.get_unchecked(index) {
+            Value::Date(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get datetime value at index (safe version with bounds checking)
     pub fn get_datetime(&self, index: usize) -> Option<i64> {
-        self.values.get(index)?.as_datetime()
+        match self.values.get(index)? {
+            Value::Datetime(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get timestamp value at index (generic, supports all timestamp types)
+    /// Get datetime value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_datetime_unchecked(&self, index: usize) -> Option<i64> {
+        match self.values.get_unchecked(index) {
+            Value::Datetime(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get timestamp value at index (generic, supports all timestamp types, safe version with bounds checking)
     pub fn get_timestamp(&self, index: usize) -> Option<i64> {
-        self.values.get(index)?.as_timestamp()
+        match self.values.get(index)? {
+            Value::Timestamp(v) => Some(*v),
+            Value::TimestampSecond(v) => Some(*v),
+            Value::TimestampMillisecond(v) => Some(*v),
+            Value::TimestampMicrosecond(v) => Some(*v),
+            Value::TimestampNanosecond(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get JSON value at index
-    pub fn get_json(&self, index: usize) -> Option<String> {
-        self.values.get(index)?.as_json()
+    /// Get timestamp value at index (generic, supports all timestamp types, unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_timestamp_unchecked(&self, index: usize) -> Option<i64> {
+        match self.values.get_unchecked(index) {
+            Value::Timestamp(v) => Some(*v),
+            Value::TimestampSecond(v) => Some(*v),
+            Value::TimestampMillisecond(v) => Some(*v),
+            Value::TimestampMicrosecond(v) => Some(*v),
+            Value::TimestampNanosecond(v) => Some(*v),
+            _ => None,
+        }
     }
 
-    /// Get decimal128 value at index
-    pub fn get_decimal128(&self, index: usize) -> Option<Vec<u8>> {
-        self.values.get(index)?.as_decimal128()
+    /// Get decimal128 value at index (safe version with bounds checking)
+    pub fn get_decimal128(&self, index: usize) -> Option<i128> {
+        match self.values.get(index)? {
+            Value::Decimal128(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Get decimal128 value at index (unsafe version without bounds checking)
+    /// # Safety
+    /// The caller must ensure that `index < self.values.len()`
+    pub unsafe fn get_decimal128_unchecked(&self, index: usize) -> Option<i128> {
+        match self.values.get_unchecked(index) {
+            Value::Decimal128(v) => Some(*v),
+            _ => None,
+        }
     }
 }
 
@@ -272,313 +549,12 @@ pub enum Value {
     TimeMicrosecond(i64),
     TimeNanosecond(i64),
 
-    // Decimal type (stored as binary for precision)
-    Decimal128(Vec<u8>),
+    // Decimal type (`precision` and `scale` are placed in the column schema)
+    Decimal128(i128),
 
     // JSON type (stored as string)
     Json(String),
 
     // Null value
     Null,
-}
-
-impl Value {
-    // Boolean accessors
-    pub fn as_bool(&self) -> Option<bool> {
-        match self {
-            Value::Boolean(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    // Integer accessors
-    pub fn as_i8(&self) -> Option<i8> {
-        match self {
-            Value::Int8(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_i16(&self) -> Option<i16> {
-        match self {
-            Value::Int16(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_i32(&self) -> Option<i32> {
-        match self {
-            Value::Int32(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_i64(&self) -> Option<i64> {
-        match self {
-            Value::Int64(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_u8(&self) -> Option<u8> {
-        match self {
-            Value::Uint8(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_u16(&self) -> Option<u16> {
-        match self {
-            Value::Uint16(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_u32(&self) -> Option<u32> {
-        match self {
-            Value::Uint32(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_u64(&self) -> Option<u64> {
-        match self {
-            Value::Uint64(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    // Float accessors
-    pub fn as_f32(&self) -> Option<f32> {
-        match self {
-            Value::Float32(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_f64(&self) -> Option<f64> {
-        match self {
-            Value::Float64(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    // String and Binary accessors
-    pub fn as_binary(&self) -> Option<Vec<u8>> {
-        match self {
-            Value::Binary(v) => Some(v.clone()),
-            _ => None,
-        }
-    }
-
-    /// Get the binary value as a slice (zero-copy)
-    pub fn as_binary_ref(&self) -> Option<&[u8]> {
-        match self {
-            Value::Binary(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub fn as_string(&self) -> Option<String> {
-        match self {
-            Value::String(v) => Some(v.clone()),
-            _ => None,
-        }
-    }
-
-    /// Get the string value as a str slice (zero-copy)
-    pub fn as_string_ref(&self) -> Option<&str> {
-        match self {
-            Value::String(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    // Date and Time accessors
-    pub fn as_date(&self) -> Option<i32> {
-        match self {
-            Value::Date(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_datetime(&self) -> Option<i64> {
-        match self {
-            Value::Datetime(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    // Timestamp accessors
-    pub fn as_timestamp(&self) -> Option<i64> {
-        match self {
-            Value::Timestamp(v) => Some(*v),
-            Value::TimestampSecond(v) => Some(*v),
-            Value::TimestampMillisecond(v) => Some(*v),
-            Value::TimestampMicrosecond(v) => Some(*v),
-            Value::TimestampNanosecond(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_timestamp_second(&self) -> Option<i64> {
-        match self {
-            Value::TimestampSecond(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_timestamp_millisecond(&self) -> Option<i64> {
-        match self {
-            Value::TimestampMillisecond(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_timestamp_microsecond(&self) -> Option<i64> {
-        match self {
-            Value::TimestampMicrosecond(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_timestamp_nanosecond(&self) -> Option<i64> {
-        match self {
-            Value::TimestampNanosecond(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    // Time accessors
-    pub fn as_time_second(&self) -> Option<i32> {
-        match self {
-            Value::TimeSecond(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_time_millisecond(&self) -> Option<i32> {
-        match self {
-            Value::TimeMillisecond(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_time_microsecond(&self) -> Option<i64> {
-        match self {
-            Value::TimeMicrosecond(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn as_time_nanosecond(&self) -> Option<i64> {
-        match self {
-            Value::TimeNanosecond(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    // Decimal accessor
-    pub fn as_decimal128(&self) -> Option<Vec<u8>> {
-        match self {
-            Value::Decimal128(v) => Some(v.clone()),
-            _ => None,
-        }
-    }
-
-    // JSON accessor
-    pub fn as_json(&self) -> Option<String> {
-        match self {
-            Value::Json(v) => Some(v.clone()),
-            _ => None,
-        }
-    }
-}
-
-// Convenient constructors for values
-impl From<bool> for Value {
-    fn from(v: bool) -> Self {
-        Value::Boolean(v)
-    }
-}
-
-// Integer types
-impl From<i8> for Value {
-    fn from(v: i8) -> Self {
-        Value::Int8(v)
-    }
-}
-
-impl From<i16> for Value {
-    fn from(v: i16) -> Self {
-        Value::Int16(v)
-    }
-}
-
-impl From<i32> for Value {
-    fn from(v: i32) -> Self {
-        Value::Int32(v)
-    }
-}
-
-impl From<i64> for Value {
-    fn from(v: i64) -> Self {
-        Value::Int64(v)
-    }
-}
-
-impl From<u8> for Value {
-    fn from(v: u8) -> Self {
-        Value::Uint8(v)
-    }
-}
-
-impl From<u16> for Value {
-    fn from(v: u16) -> Self {
-        Value::Uint16(v)
-    }
-}
-
-impl From<u32> for Value {
-    fn from(v: u32) -> Self {
-        Value::Uint32(v)
-    }
-}
-
-impl From<u64> for Value {
-    fn from(v: u64) -> Self {
-        Value::Uint64(v)
-    }
-}
-
-// Float types
-impl From<f32> for Value {
-    fn from(v: f32) -> Self {
-        Value::Float32(v)
-    }
-}
-
-impl From<f64> for Value {
-    fn from(v: f64) -> Self {
-        Value::Float64(v)
-    }
-}
-
-// Binary type
-impl From<Vec<u8>> for Value {
-    fn from(v: Vec<u8>) -> Self {
-        Value::Binary(v)
-    }
-}
-
-impl From<String> for Value {
-    fn from(v: String) -> Self {
-        Value::String(v)
-    }
-}
-
-impl From<&str> for Value {
-    fn from(v: &str) -> Self {
-        Value::String(v.to_string())
-    }
 }

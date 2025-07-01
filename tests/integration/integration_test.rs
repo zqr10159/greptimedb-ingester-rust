@@ -20,7 +20,8 @@ use greptimedb_ingester::client::Client;
 use greptimedb_ingester::helpers::schema::*;
 use greptimedb_ingester::helpers::values::*;
 use greptimedb_ingester::{
-    database::Database, BulkInserter, BulkWriteOptions, ColumnDataType, Result, Table,
+    database::Database, BulkInserter, BulkWriteOptions, ColumnDataType, Result, Rows as BulkRows,
+    TableSchema,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -112,9 +113,9 @@ async fn test_bulk_stream_writer_sequential() -> Result<()> {
 
     let table_name = unique_table_name("bulk_sequential");
 
-    // 🎯 Important: Bulk API does not create tables automatically
+    // Important: Bulk API does not create tables automatically
     // We must create the table manually first - here we use insert API
-    println!("🔧 Creating table '{table_name}' using insert API (auto table creation)...");
+    println!("Creating table '{table_name}' using insert API (auto table creation)...");
     let database = Database::new_with_dbname(&config.database, client.clone());
 
     let init_schema = vec![
@@ -149,13 +150,13 @@ async fn test_bulk_stream_writer_sequential() -> Result<()> {
     };
 
     let init_result = database.insert(init_request).await?;
-    println!("✅ Table created with initial row: {init_result} rows inserted");
+    println!("Table created with initial row: {init_result} rows inserted");
 
     // Now use bulk API (table already exists)
     let bulk_inserter = BulkInserter::new(client, &config.database);
 
     // Create table template (must match the schema above exactly)
-    let table_template = Table::builder()
+    let table_template = TableSchema::builder()
         .name(&table_name)
         .build()
         .unwrap()
@@ -176,7 +177,7 @@ async fn test_bulk_stream_writer_sequential() -> Result<()> {
     let mut total_rows = 0;
 
     for batch_num in 0..3 {
-        let rows = create_test_batch_bulk(batch_num, batch_size);
+        let rows = create_test_batch_bulk(&bulk_writer, batch_num, batch_size)?;
         let response = bulk_writer.write_rows(rows).await?;
         total_rows += response.affected_rows();
 
@@ -235,12 +236,12 @@ async fn test_bulk_stream_writer_parallel() -> Result<()> {
     };
 
     let init_result = database.insert(init_request).await?;
-    println!("✅ Parallel test table created: {init_result} rows inserted");
+    println!("Parallel test table created: {init_result} rows inserted");
 
     // Now use bulk API for parallel operations
     let bulk_inserter = BulkInserter::new(client, &config.database);
 
-    let table_template = Table::builder()
+    let table_template = TableSchema::builder()
         .name(&table_name)
         .build()
         .unwrap()
@@ -262,7 +263,7 @@ async fn test_bulk_stream_writer_parallel() -> Result<()> {
     let mut request_ids = Vec::new();
 
     for batch_num in 0..batch_count {
-        let rows = create_test_batch_bulk(batch_num, batch_size);
+        let rows = create_test_batch_bulk(&bulk_writer, batch_num, batch_size)?;
         let request_id = bulk_writer.write_rows_async(rows).await?;
         request_ids.push(request_id);
     }
@@ -385,7 +386,11 @@ async fn test_error_handling() -> Result<()> {
 }
 
 // Helper function to create test data batches for bulk operations
-fn create_test_batch_bulk(batch_id: usize, batch_size: usize) -> Vec<greptimedb_ingester::Row> {
+fn create_test_batch_bulk(
+    bulk_writer: &greptimedb_ingester::BulkStreamWriter,
+    batch_id: usize,
+    batch_size: usize,
+) -> Result<BulkRows> {
     use greptimedb_ingester::{Row, Value};
 
     let current_time = SystemTime::now()
@@ -393,7 +398,7 @@ fn create_test_batch_bulk(batch_id: usize, batch_size: usize) -> Vec<greptimedb_
         .unwrap()
         .as_millis() as i64;
 
-    let mut rows = Vec::with_capacity(batch_size);
+    let mut rows = bulk_writer.alloc_rows_buffer(batch_size, 1024)?;
 
     for i in 0..batch_size {
         let global_idx = batch_id * batch_size + i;
@@ -402,13 +407,14 @@ fn create_test_batch_bulk(batch_id: usize, batch_size: usize) -> Vec<greptimedb_
         let timestamp = current_time + (global_idx as i64 * 10);
         let status = if global_idx % 10 == 0 { 0 } else { 1 };
 
-        rows.push(Row::new().add_values(vec![
+        let row = Row::new().add_values(vec![
             Value::Timestamp(timestamp),
             Value::String(sensor_id),
             Value::Float64(temperature),
             Value::Int64(status),
-        ]));
+        ]);
+        rows.add_row(row)?;
     }
 
-    rows
+    Ok(rows)
 }

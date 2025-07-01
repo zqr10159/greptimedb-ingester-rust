@@ -29,10 +29,16 @@ pub use self::channel_manager::{ChannelConfig, ChannelManager, ClientTlsOption};
 pub use self::error::{Error, Result};
 
 // Re-export bulk module components for easier access
-pub use self::bulk::{BulkInserter, BulkStreamWriter, BulkWriteOptions, ColumnType};
+pub use self::bulk::{
+    BulkInserter, BulkStreamWriter, BulkWriteOptions, ColumnType, CompressionType, RowBuilder, Rows,
+};
+
+// Re-export arrow types for easier access
+pub use arrow_array;
+pub use arrow_schema;
 
 // Re-export table module components for easier access
-pub use self::table::{Column, Row, Table, TableBuilder, Value};
+pub use self::table::{Column, DataTypeExtension, Row, TableSchema, TableSchemaBuilder, Value};
 
 // Re-export API types for direct access
 pub use self::api::v1::{ColumnDataType, SemanticType};
