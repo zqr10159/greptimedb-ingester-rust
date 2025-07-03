@@ -16,18 +16,17 @@
 //! Best for: High-volume data ingestion, batch processing, ETL scenarios
 //! Demonstrates: Parallel request submission, async processing, performance optimization
 
-mod config_utils;
-use config_utils::DbConfig;
+#[path = "util/mod.rs"]
+mod util;
+use util::DbConfig;
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use greptimedb_ingester::bulk::AdaptiveAllocStats;
 use greptimedb_ingester::client::Client;
 use greptimedb_ingester::{
     BulkInserter, BulkStreamWriter, BulkWriteOptions, Column, ColumnDataType, CompressionType,
     Result, Row, Rows, TableSchema, Value,
 };
-use std::sync::Arc;
 
 /// Generate test data using the optimized schema-bound buffer API
 /// This method provides the best performance by reusing the writer's cached schema
@@ -112,8 +111,7 @@ fn create_test_rows(
         .unwrap()
         .as_millis() as i64;
 
-    let alloc_stats = Arc::new(AdaptiveAllocStats::new(32));
-    let mut rows = Rows::new(column_schemas, rows_per_batch, 1024, alloc_stats)?;
+    let mut rows = Rows::new(column_schemas, rows_per_batch, 1024)?;
     for i in 0..rows_per_batch {
         let global_idx = batch_id * rows_per_batch + i;
         let timestamp = current_time + (global_idx as i64 * 50); // 50ms intervals
@@ -141,7 +139,10 @@ async fn run_sequential_writes() -> Result<Duration> {
     let config = DbConfig::from_env();
     let urls = vec![config.endpoint.clone()];
     let grpc_client = Client::with_urls(&urls);
-    let bulk_inserter = BulkInserter::new(grpc_client, &config.database);
+    let bulk_inserter = BulkInserter::new(grpc_client, &config.dbname);
+
+    config.display();
+    println!();
 
     // Define time-series table schema for sensor data
     // IMPORTANT: Row data must match the exact column order defined in table_template
@@ -221,7 +222,10 @@ async fn run_parallel_writes() -> Result<Duration> {
     let config = DbConfig::from_env();
     let urls = vec![config.endpoint.clone()];
     let grpc_client = Client::with_urls(&urls);
-    let bulk_inserter = BulkInserter::new(grpc_client, &config.database);
+    let bulk_inserter = BulkInserter::new(grpc_client, &config.dbname);
+
+    config.display();
+    println!();
 
     // IMPORTANT: Row data must match the exact column order defined in table_template
     let table_template = TableSchema::builder()

@@ -105,8 +105,9 @@ pub enum Error {
         location: Location,
     },
 
-    #[snafu(display("Failed to send data to stream"))]
+    #[snafu(display("Failed to send data to stream: {}", source))]
     SendData {
+        source: futures::channel::mpsc::SendError,
         #[snafu(implicit)]
         location: Location,
     },
@@ -137,6 +138,14 @@ pub enum Error {
     SchemaMismatch {
         expected: String,
         actual: String,
+        #[snafu(implicit)]
+        location: Location,
+    },
+
+    #[snafu(display("Invalid column count: expected {}, got {}", expected, actual))]
+    InvalidColumnCount {
+        expected: usize,
+        actual: usize,
         #[snafu(implicit)]
         location: Location,
     },

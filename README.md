@@ -144,7 +144,7 @@ async fn main() -> greptimedb_ingester::Result<()> {
         .await?;
 
     // Method 1: Optimized API (recommended for production)
-    let mut rows1 = bulk_writer.alloc_rows_buffer(1000, 1024)?;  // capacity: 1000, row_buffer_size: 1024
+    let mut rows1 = bulk_writer.alloc_rows_buffer(10000, 1024)?;  // capacity: 10000, row_buffer_size: 1024
     for data in &sensor_data {
         let row = Row::new().add_values(vec![
             Value::Timestamp(data.timestamp),
@@ -156,7 +156,7 @@ async fn main() -> greptimedb_ingester::Result<()> {
     let request_id1 = bulk_writer.write_rows_async(rows1).await?;
 
     // Method 2: Schema-safe API
-    let mut rows2 = bulk_writer.alloc_rows_buffer(1000, 1024)?;  // capacity: 1000, row_buffer_size: 1024
+    let mut rows2 = bulk_writer.alloc_rows_buffer(10000, 1024)?;  // capacity: 10000, row_buffer_size: 1024
     for data in &sensor_data {
         let row = bulk_writer.new_row()
             .set("ts", Value::Timestamp(data.timestamp))?
@@ -226,8 +226,6 @@ Each `BulkStreamWriter` is bound to a specific table schema, providing both safe
 
 ```rust,no_run
 use greptimedb_ingester::{BulkStreamWriter, Rows, Column};
-use greptimedb_ingester::bulk::AdaptiveAllocStats;
-use std::sync::Arc;
 
 async fn example(bulk_writer: &BulkStreamWriter, column_schemas: &[Column]) -> greptimedb_ingester::Result<()> {
     // Recommended: Use writer-bound buffer allocation
@@ -235,9 +233,8 @@ async fn example(bulk_writer: &BulkStreamWriter, column_schemas: &[Column]) -> g
     // Shares Arc<Schema> with writer for optimal performance
     // Automatic schema compatibility
     
-    // Alternative: Direct allocation (legacy approach)
-    let alloc_stats = Arc::new(AdaptiveAllocStats::new(32));
-    let mut rows = Rows::new(column_schemas, 10000, 1024, alloc_stats)?;  // capacity: 10000, row_buffer_size: 1024, alloc_stats
+    // Alternative: Direct allocation
+    let mut rows = Rows::new(column_schemas, 10000, 1024)?;  // capacity: 10000, row_buffer_size: 1024
     // Requires schema conversion and validation overhead
     Ok(())
 }
