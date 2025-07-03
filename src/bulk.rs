@@ -751,7 +751,7 @@ impl Rows {
         }
 
         // Process all rows in the buffer at once for better performance
-        let rows: Vec<Row> = self.row_buffer.drain(..).collect();
+        let rows = std::mem::take(&mut self.row_buffer);
         self.builder.add_rows(rows)?;
 
         Ok(())
@@ -1133,6 +1133,30 @@ impl<'a> RowBuilder<'a> {
 
         self.values[field_index] = Some(value);
         Ok(self)
+    }
+
+    /// Set a field value by index. This is faster than `set` as it avoids a map lookup.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if `index` is out of bounds.
+    pub fn set_by_index(mut self, index: usize, value: Value) -> Result<Self> {
+        ensure!(
+            index < self.values.len(),
+            error::InvalidColumnIndexSnafu {
+                index,
+                total: self.values.len(),
+            }
+        );
+
+        self.values[index] = Some(value);
+        Ok(self)
+    }
+
+    /// Get the number of columns
+    #[must_use]
+    pub fn column_count(&self) -> usize {
+        self.schema.len()
     }
 
     /// Build the final Row, ensuring all required fields are set
